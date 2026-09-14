@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>LSQ Debug</title>
+<title>LSQ → Français</title>
 <style>
   *{box-sizing:border-box}
   body{
@@ -12,51 +12,81 @@
   }
   .app{max-width:760px;margin:auto;padding:14px}
   h1{font-size:28px;margin:6px 0 14px}
+  .camera-wrap{position:relative}
   video{
     width:100%;height:52vh;min-height:360px;object-fit:cover;
-    border-radius:20px;background:#17171a;transform:scaleX(-1);
+    border-radius:20px;background:#17171a;
     border:1px solid #2a2a30;
   }
-  .buttons{display:flex;gap:10px;margin-top:10px}
+  video.front{transform:scaleX(-1)}
+  video.back{transform:none}
+  .camera-label{
+    position:absolute;top:12px;left:12px;
+    background:#0009;backdrop-filter:blur(10px);
+    padding:8px 11px;border-radius:999px;font-size:12px
+  }
+  .buttons{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
   button{
-    flex:1;border:0;border-radius:14px;padding:15px;
+    border:0;border-radius:14px;padding:15px;
     font-size:15px;font-weight:700
   }
-  #cameraBtn{background:#2a2a30;color:#fff}
+  #cameraBtn,#switchBtn,#speakBtn{background:#2a2a30;color:#fff}
   #startBtn{background:#fff;color:#111}
   #startBtn.on{background:#ff6b6b}
+  button:disabled{opacity:.45}
   .panel{
     margin-top:12px;background:#151518;border:1px solid #2a2a30;
     border-radius:18px;padding:18px
   }
   .label{font-size:11px;color:#94949d;font-weight:800;letter-spacing:.12em}
   #translation{font-size:28px;font-weight:700;line-height:1.15;margin-top:10px}
+  #glosses{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+  #glosses span{
+    background:#27272c;padding:6px 8px;border-radius:8px;
+    font-size:11px;font-weight:700
+  }
+  #confidence{float:right}
   #debug{
     white-space:pre-wrap;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;
-    font-size:13px;line-height:1.55;color:#d0d0d6
+    font-size:12px;line-height:1.5;color:#d0d0d6;
+    max-height:240px;overflow:auto
   }
-  .ok{color:#7ee2a8}.err{color:#ff8585}.muted{color:#888}
+  .hint{font-size:12px;color:#777780;line-height:1.5;margin-top:12px}
 </style>
 </head>
 <body>
 <div class="app">
-  <h1>LSQ → Français <span style="font-size:14px;color:#888">DEBUG</span></h1>
+  <h1>LSQ → Français</h1>
 
-  <video id="video" autoplay muted playsinline></video>
+  <div class="camera-wrap">
+    <video id="video" class="front" autoplay muted playsinline></video>
+    <div id="cameraLabel" class="camera-label">Caméra avant</div>
+  </div>
 
   <div class="buttons">
-    <button id="cameraBtn">1. Activer caméra</button>
-    <button id="startBtn" disabled>2. Commencer</button>
+    <button id="cameraBtn">Activer caméra</button>
+    <button id="switchBtn" disabled>🔄 Changer caméra</button>
+    <button id="startBtn" disabled>Commencer</button>
+    <button id="speakBtn" disabled>🔊 Écouter</button>
   </div>
 
   <div class="panel">
-    <div class="label">TRADUCTION</div>
-    <div id="translation">Rien pour l'instant.</div>
+    <div class="label">
+      TRADUCTION
+      <span id="confidence">—</span>
+    </div>
+    <div id="translation">Signe devant la caméra.</div>
+    <div id="glosses"></div>
   </div>
 
   <div class="panel">
-    <div class="label">DEBUG — REGARDE ICI</div>
+    <div class="label">DEBUG</div>
     <div id="debug">Page chargée ✅</div>
+  </div>
+
+  <div class="hint">
+    La voix se déclenche automatiquement quand la confiance est d'au moins 75 %.
+    Le bouton Écouter permet de répéter la dernière traduction.
   </div>
 
   <canvas id="canvas" hidden></canvas>
@@ -66,65 +96,109 @@
 const video = document.getElementById("video");
 const canvas = document.getElementById("canvas");
 const cameraBtn = document.getElementById("cameraBtn");
+const switchBtn = document.getElementById("switchBtn");
 const startBtn = document.getElementById("startBtn");
+const speakBtn = document.getElementById("speakBtn");
+const cameraLabel = document.getElementById("cameraLabel");
 const translationEl = document.getElementById("translation");
+const glossesEl = document.getElementById("glosses");
+const confidenceEl = document.getElementById("confidence");
 const debugEl = document.getElementById("debug");
 
+let stream = null;
+let currentFacing = "user";
 let running = false;
 let busy = false;
-let stream = null;
+let lastTranslation = "";
+let lastSpokenTranslation = "";
 
 function log(msg) {
   debugEl.textContent += "\n" + msg;
   debugEl.scrollTop = debugEl.scrollHeight;
 }
 
-function resetDebug() {
-  debugEl.textContent = "Début du test...";
+function speak(text) {
+  if (!text || !("speechSynthesis" in window)) return;
+
+  speechSynthesis.cancel();
+
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = "fr-CA";
+  u.rate = 1;
+  u.pitch = 1;
+
+  speechSynthesis.speak(u);
+}
+
+async function startCamera(facing = currentFacing) {
+  if (stream) {
+    stream.getTracks().forEach(track => track.stop());
+  }
+
+  currentFacing = facing;
+
+  const constraints = {
+    audio: false,
+    video: {
+      facingMode: { ideal: currentFacing },
+      width: { ideal: 1280 },
+      height: { ideal: 720 }
+    }
+  };
+
+  stream = await navigator.mediaDevices.getUserMedia(constraints);
+  video.srcObject = stream;
+  await video.play();
+
+  const isFront = currentFacing === "user";
+  video.classList.toggle("front", isFront);
+  video.classList.toggle("back", !isFront);
+
+  cameraLabel.textContent = isFront ? "Caméra avant" : "Caméra arrière";
+
+  log("✅ Caméra active : " + (isFront ? "avant" : "arrière"));
 }
 
 cameraBtn.onclick = async () => {
-  resetDebug();
-  log("1. Demande d'accès à la caméra...");
-
   try {
-    stream = await navigator.mediaDevices.getUserMedia({
-      video: {
-        facingMode: "user",
-        width: { ideal: 1280 },
-        height: { ideal: 720 }
-      },
-      audio: false
-    });
-
-    video.srcObject = stream;
-    await video.play();
-
-    log("✅ Caméra OK");
-    log("Résolution vidéo: " + video.videoWidth + "x" + video.videoHeight);
+    debugEl.textContent = "Activation caméra...";
+    await startCamera("user");
 
     cameraBtn.disabled = true;
-    startBtn.disabled = false;
     cameraBtn.textContent = "Caméra active ✅";
+    switchBtn.disabled = false;
+    startBtn.disabled = false;
   } catch (e) {
     log("❌ ERREUR CAMÉRA: " + e.message);
-    alert("La caméra n'a pas pu être ouverte.");
+    alert("Impossible d'ouvrir la caméra.");
+  }
+};
+
+switchBtn.onclick = async () => {
+  try {
+    const next = currentFacing === "user" ? "environment" : "user";
+    log("🔄 Changement de caméra...");
+    await startCamera(next);
+  } catch (e) {
+    log("❌ Impossible de changer de caméra: " + e.message);
   }
 };
 
 startBtn.onclick = () => {
   running = !running;
-  startBtn.textContent = running ? "Arrêter" : "2. Commencer";
+  startBtn.textContent = running ? "Arrêter" : "Commencer";
   startBtn.classList.toggle("on", running);
 
   if (running) {
-    resetDebug();
-    log("✅ Bouton Commencer fonctionne");
-    log("Démarrage du test...");
+    log("▶️ Traduction démarrée");
     loop();
   } else {
-    log("⏹ Test arrêté");
+    log("⏹ Traduction arrêtée");
   }
+};
+
+speakBtn.onclick = () => {
+  speak(lastTranslation);
 };
 
 function captureFrame() {
@@ -144,7 +218,7 @@ function captureFrame() {
   const data = canvas.toDataURL("image/jpeg", 0.72);
 
   if (!data || data.length < 1000) {
-    throw new Error("L'image capturée semble vide.");
+    throw new Error("Image capturée vide.");
   }
 
   return data;
@@ -153,11 +227,10 @@ function captureFrame() {
 async function captureSequence() {
   const frames = [];
 
-  log("2. Capture de 10 images...");
+  log("📸 Capture de 10 images...");
 
   for (let i = 0; i < 10; i++) {
     frames.push(captureFrame());
-    log("   image " + (i + 1) + "/10 ✅");
     await new Promise(r => setTimeout(r, 220));
   }
 
@@ -174,7 +247,7 @@ async function loop() {
 
     if (!running) return;
 
-    log("3. Envoi à /api/translate ...");
+    log("⬆️ Envoi à Astra...");
 
     const response = await fetch("/api/translate", {
       method: "POST",
@@ -182,43 +255,62 @@ async function loop() {
       body: JSON.stringify({ frames })
     });
 
-    log("4. Réponse HTTP reçue: " + response.status);
+    log("HTTP " + response.status);
 
     const raw = await response.text();
-    log("5. Réponse brute:");
-    log(raw);
 
     let data;
     try {
       data = JSON.parse(raw);
-      log("✅ JSON lisible");
-    } catch (e) {
-      throw new Error("La réponse n'est pas du JSON valide.");
+    } catch {
+      throw new Error("Réponse API invalide: " + raw.slice(0, 160));
     }
 
     if (!response.ok) {
-      throw new Error(data.error || "Erreur API inconnue");
+      throw new Error(data.error || "Erreur API");
     }
 
+    const confidence = Number(data.confidence || 0);
+    confidenceEl.textContent = Math.round(confidence * 100) + "%";
+
     if (data.detected && data.french) {
+      lastTranslation = data.french;
       translationEl.textContent = data.french;
-      log("✅ Signe détecté");
-      log("Traduction: " + data.french);
-      log("Confiance: " + Math.round((data.confidence || 0) * 100) + "%");
+      speakBtn.disabled = false;
+
+      glossesEl.innerHTML = "";
+      (data.glosses || []).forEach(g => {
+        const chip = document.createElement("span");
+        chip.textContent = g;
+        glossesEl.appendChild(chip);
+      });
+
+      log("✅ Reconnu : " + data.french);
+      log("Confiance : " + Math.round(confidence * 100) + "%");
+
+      if (
+        confidence >= 0.75 &&
+        data.french !== lastSpokenTranslation
+      ) {
+        speak(data.french);
+        lastSpokenTranslation = data.french;
+        log("🔊 Traduction prononcée");
+      }
     } else {
       translationEl.textContent = "Aucun signe reconnu.";
-      log("⚠️ Astra a répondu, mais n'a rien reconnu.");
-      log("Confiance: " + Math.round((data.confidence || 0) * 100) + "%");
+      glossesEl.innerHTML = "";
+      log("⚠️ Aucun signe reconnu");
     }
 
   } catch (e) {
     translationEl.textContent = "Erreur";
-    log("❌ ERREUR: " + e.message);
-    running = false;
-    startBtn.textContent = "2. Commencer";
-    startBtn.classList.remove("on");
+    log("❌ " + e.message);
   } finally {
     busy = false;
+
+    if (running) {
+      setTimeout(loop, 350);
+    }
   }
 }
 </script>
