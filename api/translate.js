@@ -1,81 +1,118 @@
 import OpenAI from "openai";
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY
+});
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "POST seulement" });
   }
 
-  if (!process.env.OPENAI_API_KEY) {
-    return res.status(500).json({ error: "Clé OpenAI non configurée sur Vercel." });
-  }
-
   const { frames } = req.body || {};
-  if (!Array.isArray(frames) || frames.length < 4) {
+
+  if (!Array.isArray(frames) || frames.length < 8) {
     return res.status(400).json({ error: "Pas assez d'images." });
   }
 
   try {
     const response = await openai.responses.create({
       model: "gpt-6-astra",
-      reasoning: { effort: "low" },
+      reasoning: { effort: "medium" },
       store: false,
+
       input: [{
         role: "user",
         content: [
           {
             type: "input_text",
-            text: `Tu analyses une séquence d'images dans l'ordre chronologique.
-Objectif: reconnaître de la Langue des signes québécoise (LSQ).
+            text: `
+Tu es un système de reconnaissance visuelle spécialisé en Langue des signes québécoise (LSQ).
 
-Observe les deux mains, les doigts, l'orientation, l'emplacement,
-le mouvement entre les images, le visage, la bouche, les sourcils,
-la tête et le haut du corps.
+Tu reçois une séquence CHRONOLOGIQUE d'images provenant d'une caméra.
+Elles représentent environ 2 secondes de mouvement.
 
-Ne juge jamais sur une seule image.
-Ne devine pas si tu n'es pas assez certain.
+TA MISSION:
+Donne TOUJOURS ta meilleure interprétation du geste ou de la séquence LSQ visible.
 
-Réponds UNIQUEMENT avec un JSON valide:
-{
-  "detected": true,
-  "french": "traduction naturelle en français",
-  "glosses": ["SIGNE1", "SIGNE2"],
-  "confidence": 0.0
-}
+IMPORTANT:
+- Ne retourne PAS "aucun signe reconnu" simplement parce que tu n'es pas certain.
+- Si les mains font clairement un geste, propose le signe LSQ le PLUS PROBABLE.
+- Utilise confidence pour indiquer ton incertitude.
+- Analyse la séquence entière, pas seulement une image.
+- Compare le début, le milieu et la fin du mouvement.
+- Observe:
+  1. forme des doigts
+  2. orientation des paumes
+  3. main gauche et main droite
+  4. position par rapport au visage et au corps
+  5. direction et répétition du mouvement
+  6. visage, sourcils, bouche et tête
+  7. contexte entre plusieurs signes
+- Si plusieurs signes successifs sont visibles, reconstruis leur sens en français naturel.
+- N'interprète pas la LSQ comme du français mot à mot.
+- Si aucune main / aucun geste communicatif n'est réellement visible, alors seulement mets has_gesture=false.
 
-Si tu n'es pas assez certain:
-{
-  "detected": false,
-  "french": "",
-  "glosses": [],
-  "confidence": 0.0
-}`
+Retourne une estimation même avec une faible confiance.
+            `.trim()
           },
+
           ...frames.map(image_url => ({
             type: "input_image",
             image_url,
             detail: "high"
           }))
         ]
-      }]
+      }],
+
+      text: {
+        format: {
+          type: "json_schema",
+          name: "lsq_result",
+          strict: true,
+          schema: {
+            type: "object",
+            additionalProperties: false,
+            properties: {
+              has_gesture: {
+                type: "boolean"
+              },
+              french: {
+                type: "string"
+              },
+              glosses: {
+                type: "array",
+                items: { type: "string" }
+              },
+              confidence: {
+                type: "number",
+                minimum: 0,
+                maximum: 1
+              },
+              visual_description: {
+                type: "string"
+              }
+            },
+            required: [
+              "has_gesture",
+              "french",
+              "glosses",
+              "confidence",
+              "visual_description"
+            ]
+          }
+        }
+      }
     });
 
-    let text = (response.output_text || "").trim()
-      .replace(/^```json\s*/i, "")
-      .replace(/^```\s*/i, "")
-      .replace(/\s*```$/i, "");
+    const result = JSON.parse(response.output_text);
 
-    let data;
-    try {
-      data = JSON.parse(text);
-    } catch {
-      data = { detected: false, french: "", glosses: [], confidence: 0 };
-    }
+    return res.status(200).json(result);
 
-    res.status(200).json(data);
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: err?.message || "Erreur Astra" });
+    return res.status(500).json({
+      error: err?.message || "Erreur Astra"
+    });
   }
 }
