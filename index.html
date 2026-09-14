@@ -4,315 +4,346 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>LSQ → Français</title>
+
 <style>
-  *{box-sizing:border-box}
-  body{
-    margin:0;background:#0b0b0d;color:#fff;
-    font-family:system-ui,-apple-system,Segoe UI,sans-serif;
-  }
-  .app{max-width:760px;margin:auto;padding:14px}
-  h1{font-size:28px;margin:6px 0 14px}
-  .camera-wrap{position:relative}
-  video{
-    width:100%;height:52vh;min-height:360px;object-fit:cover;
-    border-radius:20px;background:#17171a;
-    border:1px solid #2a2a30;
-  }
-  video.front{transform:scaleX(-1)}
-  video.back{transform:none}
-  .camera-label{
-    position:absolute;top:12px;left:12px;
-    background:#0009;backdrop-filter:blur(10px);
-    padding:8px 11px;border-radius:999px;font-size:12px
-  }
-  .buttons{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
-  button{
-    border:0;border-radius:14px;padding:15px;
-    font-size:15px;font-weight:700
-  }
-  #cameraBtn,#switchBtn,#speakBtn{background:#2a2a30;color:#fff}
-  #startBtn{background:#fff;color:#111}
-  #startBtn.on{background:#ff6b6b}
-  button:disabled{opacity:.45}
-  .panel{
-    margin-top:12px;background:#151518;border:1px solid #2a2a30;
-    border-radius:18px;padding:18px
-  }
-  .label{font-size:11px;color:#94949d;font-weight:800;letter-spacing:.12em}
-  #translation{font-size:28px;font-weight:700;line-height:1.15;margin-top:10px}
-  #glosses{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
-  #glosses span{
-    background:#27272c;padding:6px 8px;border-radius:8px;
-    font-size:11px;font-weight:700
-  }
-  #confidence{float:right}
-  #debug{
-    white-space:pre-wrap;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;
-    font-size:12px;line-height:1.5;color:#d0d0d6;
-    max-height:240px;overflow:auto
-  }
-  .hint{font-size:12px;color:#777780;line-height:1.5;margin-top:12px}
+*{box-sizing:border-box}
+body{
+  margin:0;
+  background:#09090b;
+  color:white;
+  font-family:system-ui,-apple-system,Segoe UI,sans-serif
+}
+.app{max-width:760px;margin:auto;padding:12px}
+h1{margin:5px 0 14px;font-size:28px}
+.cam{position:relative}
+video{
+  width:100%;
+  height:55vh;
+  min-height:390px;
+  object-fit:cover;
+  border-radius:22px;
+  background:#17171a;
+  border:1px solid #29292f
+}
+video.front{transform:scaleX(-1)}
+.badge{
+  position:absolute;
+  top:12px;
+  left:12px;
+  padding:8px 11px;
+  border-radius:999px;
+  background:#000a;
+  backdrop-filter:blur(10px);
+  font-size:12px
+}
+.buttons{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:9px;
+  margin-top:9px
+}
+button{
+  border:0;
+  border-radius:14px;
+  padding:14px;
+  font-size:14px;
+  font-weight:750
+}
+.dark{background:#29292e;color:white}
+.white{background:white;color:#111}
+.stop{background:#ff6b6b!important}
+button:disabled{opacity:.4}
+
+.result{
+  margin-top:10px;
+  background:#141417;
+  border:1px solid #29292f;
+  border-radius:19px;
+  padding:19px
+}
+.title{
+  color:#91919a;
+  font-size:11px;
+  letter-spacing:.12em;
+  font-weight:800
+}
+#confidence{float:right}
+#translation{
+  margin-top:11px;
+  font-size:29px;
+  font-weight:700;
+  line-height:1.15;
+  min-height:65px
+}
+#glosses{
+  display:flex;
+  gap:6px;
+  flex-wrap:wrap;
+  margin-top:8px
+}
+#glosses span{
+  background:#29292f;
+  padding:6px 8px;
+  border-radius:8px;
+  font-size:11px;
+  font-weight:700
+}
+#vision{
+  margin-top:10px;
+  color:#85858f;
+  font-size:12px;
+  line-height:1.45
+}
+#debug{
+  margin-top:10px;
+  font-size:11px;
+  color:#71717a
+}
 </style>
 </head>
+
 <body>
 <div class="app">
-  <h1>LSQ → Français</h1>
 
-  <div class="camera-wrap">
-    <video id="video" class="front" autoplay muted playsinline></video>
-    <div id="cameraLabel" class="camera-label">Caméra avant</div>
+<h1>LSQ → Français</h1>
+
+<div class="cam">
+  <video id="video" class="front" autoplay muted playsinline></video>
+  <div id="status" class="badge">Caméra inactive</div>
+</div>
+
+<div class="buttons">
+  <button id="cameraBtn" class="dark">Activer caméra</button>
+  <button id="switchBtn" class="dark" disabled>🔄 Changer caméra</button>
+  <button id="startBtn" class="white" disabled>Commencer</button>
+  <button id="speakBtn" class="dark" disabled>🔊 Écouter</button>
+</div>
+
+<div class="result">
+  <div class="title">
+    MEILLEURE INTERPRÉTATION
+    <span id="confidence">—</span>
   </div>
 
-  <div class="buttons">
-    <button id="cameraBtn">Activer caméra</button>
-    <button id="switchBtn" disabled>🔄 Changer caméra</button>
-    <button id="startBtn" disabled>Commencer</button>
-    <button id="speakBtn" disabled>🔊 Écouter</button>
-  </div>
+  <div id="translation">Signe devant la caméra.</div>
+  <div id="glosses"></div>
+  <div id="vision"></div>
+</div>
 
-  <div class="panel">
-    <div class="label">
-      TRADUCTION
-      <span id="confidence">—</span>
-    </div>
-    <div id="translation">Signe devant la caméra.</div>
-    <div id="glosses"></div>
-  </div>
+<div id="debug">Prêt.</div>
 
-  <div class="panel">
-    <div class="label">DEBUG</div>
-    <div id="debug">Page chargée ✅</div>
-  </div>
+<canvas id="canvas" hidden></canvas>
 
-  <div class="hint">
-    La voix se déclenche automatiquement quand la confiance est d'au moins 75 %.
-    Le bouton Écouter permet de répéter la dernière traduction.
-  </div>
-
-  <canvas id="canvas" hidden></canvas>
 </div>
 
 <script>
-const video = document.getElementById("video");
-const canvas = document.getElementById("canvas");
-const cameraBtn = document.getElementById("cameraBtn");
-const switchBtn = document.getElementById("switchBtn");
-const startBtn = document.getElementById("startBtn");
-const speakBtn = document.getElementById("speakBtn");
-const cameraLabel = document.getElementById("cameraLabel");
-const translationEl = document.getElementById("translation");
-const glossesEl = document.getElementById("glosses");
-const confidenceEl = document.getElementById("confidence");
-const debugEl = document.getElementById("debug");
+const video=document.querySelector("#video");
+const canvas=document.querySelector("#canvas");
+const cameraBtn=document.querySelector("#cameraBtn");
+const switchBtn=document.querySelector("#switchBtn");
+const startBtn=document.querySelector("#startBtn");
+const speakBtn=document.querySelector("#speakBtn");
+const statusEl=document.querySelector("#status");
+const translationEl=document.querySelector("#translation");
+const glossesEl=document.querySelector("#glosses");
+const confidenceEl=document.querySelector("#confidence");
+const visionEl=document.querySelector("#vision");
+const debugEl=document.querySelector("#debug");
 
-let stream = null;
-let currentFacing = "user";
-let running = false;
-let busy = false;
-let lastTranslation = "";
-let lastSpokenTranslation = "";
+let stream=null;
+let facing="user";
+let running=false;
+let busy=false;
+let lastText="";
+let lastSpoken="";
 
-function log(msg) {
-  debugEl.textContent += "\n" + msg;
-  debugEl.scrollTop = debugEl.scrollHeight;
+function status(t){
+  statusEl.textContent=t;
 }
 
-function speak(text) {
-  if (!text || !("speechSynthesis" in window)) return;
+function speak(text){
+  if(!text || !("speechSynthesis" in window)) return;
 
   speechSynthesis.cancel();
 
-  const u = new SpeechSynthesisUtterance(text);
-  u.lang = "fr-CA";
-  u.rate = 1;
-  u.pitch = 1;
+  const u=new SpeechSynthesisUtterance(text);
+  u.lang="fr-CA";
+  u.rate=1;
 
   speechSynthesis.speak(u);
 }
 
-async function startCamera(facing = currentFacing) {
-  if (stream) {
-    stream.getTracks().forEach(track => track.stop());
+async function openCamera(newFacing){
+  if(stream){
+    stream.getTracks().forEach(t=>t.stop());
   }
 
-  currentFacing = facing;
+  facing=newFacing;
 
-  const constraints = {
-    audio: false,
-    video: {
-      facingMode: { ideal: currentFacing },
-      width: { ideal: 1280 },
-      height: { ideal: 720 }
+  stream=await navigator.mediaDevices.getUserMedia({
+    audio:false,
+    video:{
+      facingMode:{ideal:facing},
+      width:{ideal:1280},
+      height:{ideal:720},
+      frameRate:{ideal:30}
     }
-  };
+  });
 
-  stream = await navigator.mediaDevices.getUserMedia(constraints);
-  video.srcObject = stream;
+  video.srcObject=stream;
   await video.play();
 
-  const isFront = currentFacing === "user";
-  video.classList.toggle("front", isFront);
-  video.classList.toggle("back", !isFront);
+  video.classList.toggle("front",facing==="user");
 
-  cameraLabel.textContent = isFront ? "Caméra avant" : "Caméra arrière";
-
-  log("✅ Caméra active : " + (isFront ? "avant" : "arrière"));
+  status(facing==="user"?"Caméra avant":"Caméra arrière");
 }
 
-cameraBtn.onclick = async () => {
-  try {
-    debugEl.textContent = "Activation caméra...";
-    await startCamera("user");
-
-    cameraBtn.disabled = true;
-    cameraBtn.textContent = "Caméra active ✅";
-    switchBtn.disabled = false;
-    startBtn.disabled = false;
-  } catch (e) {
-    log("❌ ERREUR CAMÉRA: " + e.message);
+cameraBtn.onclick=async()=>{
+  try{
+    await openCamera("user");
+    cameraBtn.disabled=true;
+    cameraBtn.textContent="Caméra active ✅";
+    switchBtn.disabled=false;
+    startBtn.disabled=false;
+  }catch(e){
     alert("Impossible d'ouvrir la caméra.");
+    debugEl.textContent=e.message;
   }
 };
 
-switchBtn.onclick = async () => {
-  try {
-    const next = currentFacing === "user" ? "environment" : "user";
-    log("🔄 Changement de caméra...");
-    await startCamera(next);
-  } catch (e) {
-    log("❌ Impossible de changer de caméra: " + e.message);
+switchBtn.onclick=async()=>{
+  try{
+    status("Changement...");
+    await openCamera(facing==="user"?"environment":"user");
+  }catch(e){
+    debugEl.textContent="Erreur caméra: "+e.message;
   }
 };
 
-startBtn.onclick = () => {
-  running = !running;
-  startBtn.textContent = running ? "Arrêter" : "Commencer";
-  startBtn.classList.toggle("on", running);
+startBtn.onclick=()=>{
+  running=!running;
 
-  if (running) {
-    log("▶️ Traduction démarrée");
-    loop();
-  } else {
-    log("⏹ Traduction arrêtée");
+  startBtn.textContent=running?"Arrêter":"Commencer";
+  startBtn.classList.toggle("stop",running);
+
+  if(running){
+    status("En écoute...");
+    analyse();
+  }else{
+    status("En pause");
   }
 };
 
-speakBtn.onclick = () => {
-  speak(lastTranslation);
-};
+speakBtn.onclick=()=>speak(lastText);
 
-function captureFrame() {
-  if (!video.videoWidth || !video.videoHeight) {
-    throw new Error("La vidéo n'est pas encore prête.");
-  }
+function frame(){
+  if(!video.videoWidth) throw new Error("Caméra pas prête");
 
-  const width = 512;
-  const ratio = video.videoHeight / video.videoWidth;
+  const w=640;
+  const ratio=video.videoHeight/video.videoWidth;
 
-  canvas.width = width;
-  canvas.height = Math.round(width * ratio);
+  canvas.width=w;
+  canvas.height=Math.round(w*ratio);
 
-  const ctx = canvas.getContext("2d");
-  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+  canvas.getContext("2d").drawImage(
+    video,
+    0,0,
+    canvas.width,
+    canvas.height
+  );
 
-  const data = canvas.toDataURL("image/jpeg", 0.72);
-
-  if (!data || data.length < 1000) {
-    throw new Error("Image capturée vide.");
-  }
-
-  return data;
+  return canvas.toDataURL("image/jpeg",0.78);
 }
 
-async function captureSequence() {
-  const frames = [];
+async function capture(){
+  const frames=[];
 
-  log("📸 Capture de 10 images...");
-
-  for (let i = 0; i < 10; i++) {
-    frames.push(captureFrame());
-    await new Promise(r => setTimeout(r, 220));
+  // 16 images sur environ 2.25 secondes :
+  // beaucoup plus d'information de mouvement que l'ancienne version.
+  for(let i=0;i<16;i++){
+    frames.push(frame());
+    await new Promise(r=>setTimeout(r,150));
   }
 
-  log("✅ 10 images capturées");
   return frames;
 }
 
-async function loop() {
-  if (!running || busy) return;
-  busy = true;
+async function analyse(){
+  if(!running || busy) return;
 
-  try {
-    const frames = await captureSequence();
+  busy=true;
 
-    if (!running) return;
+  try{
+    status("Capture du mouvement...");
+    const frames=await capture();
 
-    log("⬆️ Envoi à Astra...");
+    if(!running) return;
 
-    const response = await fetch("/api/translate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ frames })
+    status("Astra analyse...");
+    debugEl.textContent="16 images envoyées à Astra...";
+
+    const r=await fetch("/api/translate",{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({frames})
     });
 
-    log("HTTP " + response.status);
+    const data=await r.json();
 
-    const raw = await response.text();
-
-    let data;
-    try {
-      data = JSON.parse(raw);
-    } catch {
-      throw new Error("Réponse API invalide: " + raw.slice(0, 160));
-    }
-
-    if (!response.ok) {
+    if(!r.ok){
       throw new Error(data.error || "Erreur API");
     }
 
-    const confidence = Number(data.confidence || 0);
-    confidenceEl.textContent = Math.round(confidence * 100) + "%";
+    const confidence=Number(data.confidence||0);
+    confidenceEl.textContent=Math.round(confidence*100)+"%";
 
-    if (data.detected && data.french) {
-      lastTranslation = data.french;
-      translationEl.textContent = data.french;
-      speakBtn.disabled = false;
+    if(data.has_gesture && data.french){
+      lastText=data.french;
 
-      glossesEl.innerHTML = "";
-      (data.glosses || []).forEach(g => {
-        const chip = document.createElement("span");
-        chip.textContent = g;
-        glossesEl.appendChild(chip);
+      translationEl.textContent=data.french;
+      visionEl.textContent=data.visual_description || "";
+
+      glossesEl.innerHTML="";
+      (data.glosses||[]).forEach(g=>{
+        const el=document.createElement("span");
+        el.textContent=g;
+        glossesEl.appendChild(el);
       });
 
-      log("✅ Reconnu : " + data.french);
-      log("Confiance : " + Math.round(confidence * 100) + "%");
+      speakBtn.disabled=false;
 
-      if (
-        confidence >= 0.75 &&
-        data.french !== lastSpokenTranslation
-      ) {
+      // IMPORTANT:
+      // aucun seuil de confiance ici.
+      // Même 30 % ou 40 % est affiché.
+      if(data.french!==lastSpoken){
         speak(data.french);
-        lastSpokenTranslation = data.french;
-        log("🔊 Traduction prononcée");
+        lastSpoken=data.french;
       }
-    } else {
-      translationEl.textContent = "Aucun signe reconnu.";
-      glossesEl.innerHTML = "";
-      log("⚠️ Aucun signe reconnu");
+
+      status("Interprétation trouvée");
+      debugEl.textContent=
+        "Astra a donné sa meilleure estimation ("+
+        Math.round(confidence*100)+" %).";
+    }else{
+      translationEl.textContent="Je ne vois pas encore de geste clair.";
+      visionEl.textContent=data.visual_description || "";
+      glossesEl.innerHTML="";
+      status("Fais un signe");
+      debugEl.textContent="Astra ne voit pas de geste communicatif.";
     }
 
-  } catch (e) {
-    translationEl.textContent = "Erreur";
-    log("❌ " + e.message);
-  } finally {
-    busy = false;
+  }catch(e){
+    status("Erreur");
+    debugEl.textContent="Erreur: "+e.message;
+  }finally{
+    busy=false;
 
-    if (running) {
-      setTimeout(loop, 350);
+    if(running){
+      setTimeout(analyse,250);
     }
   }
 }
 </script>
+
 </body>
 </html>
